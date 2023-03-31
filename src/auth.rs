@@ -8,8 +8,8 @@ pub const JWT_EXPIRES_IN_MINUTES: u128 = 60;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    sub: String, // subject
-    exp: u128,   // expiration
+    pub sub: String, // subject
+    exp: u128,       // expiration
 }
 
 impl Claims {
@@ -54,7 +54,7 @@ pub fn create_jwt(username: String) -> String {
     token
 }
 
-pub fn decode_jwt(token: String) -> Result<Claims, String> {
+pub fn decode_jwt(token: &String) -> Result<Claims, String> {
     let key = &DecodingKey::from_secret(JWT_SECRET.as_ref());
     let validation = Validation::new(Algorithm::HS256);
 

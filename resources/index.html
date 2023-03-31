@@ -21,7 +21,7 @@
 
         websocket.onopen = function () {
             console.log("connection opened");
-            websocket.send(username.value);
+            websocket.send(localStorage.getItem("token"));
         }
 
         const btn = this;

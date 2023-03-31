@@ -1,3 +1,4 @@
+use crate::auth;
 use axum::extract::State;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
@@ -21,17 +22,18 @@ async fn chat_socket(socket: WebSocket, state: Arc<AppState>) {
 
     let mut username = "".to_string();
     while let Some(Ok(message)) = receiver.next().await {
-        if let Message::Text(name) = message {
-            // If username that is sent by client is not taken, fill username string.
-            check_username(&state, &mut username, &name);
-
-            if username.is_empty() {
-                // Only send our client that username is taken.
-                let _ = sender
-                    .send(Message::Text(String::from("Username already taken.")))
-                    .await;
-
-                return;
+        if let Message::Text(received_token) = message {
+            // Check if token is valid.
+            let claims = auth::decode_jwt(&received_token);
+            match claims {
+                Ok(claims) => {
+                    username = claims.sub;
+                    break;
+                }
+                Err(e) => {
+                    let _ = sender.send(Message::Text(format!("Error: {}", e))).await;
+                    return;
+                }
             }
         }
     }
