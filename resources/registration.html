@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Register</h1>
+<form id="register-login-form">
+    <label for="username">Username:</label>
+    <input type="text" id="username" name="username" minlength="4" maxlength="20" pattern="[0-9a-z]+" required>
+    <br>
+    <label for="password">Password:</label>
+    <input type="password" id="password" name="password" minlength="6" required>
+    <br>
+    <input type="submit" name="register_button" value="Register">
+    <input type="submit" name="login_button" value="Login">
+</form>
+
+<div id="response-message"></div>
+<script>
+    document.getElementById('register-login-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        let target = ""
+        const button = event.submitter;
+        if (button.name === 'register_button') {
+            // Handle the registration logic
+            console.log('Register button clicked');
+            target = "/register"
+        } else if (button.name === 'login_button') {
+            // Handle the login logic
+            console.log('Login button clicked');
+            target = "/login"
+        }
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        const payload = {
+            username,
+            password,
+        };
+
+        try {
+            const response = await fetch(target, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('response-message').style.color = 'green';
+            } else {
+                document.getElementById('response-message').style.color = 'red';
+            }
+            localStorage.setItem('token', data.token); // Store the JWT in localStorage (for now)
+            document.getElementById('response-message').textContent = data.message;
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('response-message').style.color = 'red';
+            document.getElementById('response-message').textContent = 'An error occurred while processing your request.';
+        }
+    });
+</script>
+{% endblock content %}
