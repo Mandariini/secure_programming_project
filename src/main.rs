@@ -7,6 +7,7 @@ use std::{
 };
 use tera::Tera;
 use tokio::sync::broadcast;
+use tower::limit::ConcurrencyLimitLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
@@ -64,8 +65,9 @@ async fn main() {
         .route("/join", get(join_chat))
         .route("/register", get(registration).post(post_registration))
         .route("/login", post(post_login))
-        .layer(Extension(Arc::new(tera)))
         .fallback(not_found)
+        .layer(Extension(Arc::new(tera)))
+        .layer(ConcurrencyLimitLayer::new(100))
         .with_state(app_state);
 
     // run it with hyper on localhost:3000

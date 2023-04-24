@@ -1,10 +1,12 @@
 use crate::auth::{Claims, JWT_EXPIRES_IN_MINUTES, JWT_SECRET};
 use crate::{RegisterLoginRequest, RegisterLoginResponse, UserInfo};
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{self, Response, StatusCode};
 use axum::response::{Html, IntoResponse};
+use axum::{http::header::SET_COOKIE, http::HeaderValue};
 use axum::{Extension, Json};
 use jsonwebtoken::{EncodingKey, Header};
+use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tera::Tera;
@@ -81,19 +83,35 @@ pub async fn post_registration(
     }
 }
 
+pub async fn authorize(headers: http::HeaderMap) -> ApiResult<()> {
+    let cookie = headers.get(http::header::COOKIE).ok_or((
+        StatusCode::UNAUTHORIZED,
+        Json(json!({ "error": "No cookie" })),
+    ))?;
+
+    // Decode JWT
+
+    Ok(())
+}
+
 pub async fn post_login(
     State(app_state): State<Arc<AppState>>,
     Json(payload): Json<RegisterLoginRequest>,
-) -> Json<RegisterLoginResponse> {
-    // Validate username and password lengths
+) -> impl IntoResponse {
     match payload.validate() {
         Ok(_) => {}
         Err(e) => {
-            return Json(RegisterLoginResponse {
-                success: false,
-                message: e.to_string(),
-                token: None,
-            });
+            return Response::builder()
+                .status(400)
+                .body(
+                    Json(RegisterLoginResponse {
+                        success: false,
+                        message: e.to_string(),
+                        token: None,
+                    })
+                    .into_response(),
+                )
+                .unwrap();
         }
     }
 
@@ -105,27 +123,46 @@ pub async fn post_login(
                 let token = auth::create_jwt(payload.username);
                 info!("Token: {}", token);
 
-                return Json(RegisterLoginResponse {
-                    success: true,
-                    message: "Login successfull!".to_string(),
-                    token: Some(token),
-                });
+                return Response::builder()
+                    .header("content-type", "application/json")
+                    .header(SET_COOKIE, "Authorization=Bearer ".to_string() + &token)
+                    .body(
+                        Json(RegisterLoginResponse {
+                            success: true,
+                            message: "Login successful!".to_string(),
+                            token: Some(token),
+                        })
+                        .into_response(),
+                    )
+                    .unwrap();
             } else {
                 // Wrong password
-                return Json(RegisterLoginResponse {
-                    success: false,
-                    message: "User does not exist or wrong password".to_string(),
-                    token: None,
-                });
+                return Response::builder()
+                    .status(401)
+                    .body(
+                        Json(RegisterLoginResponse {
+                            success: false,
+                            message: "User does not exist or wrong password".to_string(),
+                            token: None,
+                        })
+                        .into_response(),
+                    )
+                    .unwrap();
             }
         }
         None => {
             // User does not exist
-            return Json(RegisterLoginResponse {
-                success: false,
-                message: "User does not exist or wrong password".to_string(),
-                token: None,
-            });
+            return Response::builder()
+                .status(401)
+                .body(
+                    Json(RegisterLoginResponse {
+                        success: false,
+                        message: "User does not exist or wrong password".to_string(),
+                        token: None,
+                    })
+                    .into_response(),
+                )
+                .unwrap();
         }
     }
 }

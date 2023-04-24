@@ -71,9 +71,16 @@ impl RegisterLoginRequest {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct RegisterLoginResponse {
     pub success: bool,
     pub message: String,
     pub token: Option<String>,
 }
+
+// impl IntoResponse for RegisterLoginResponse {
+//     type Body = String;
+//     type BodyError = Infallible;
+
+//     fn into_response(Self) -> Response
+// }

@@ -83,13 +83,3 @@ async fn chat_socket(socket: WebSocket, state: Arc<AppState>) {
     // Remove username from map so new clients can take it again.
     state.user_set.lock().unwrap().remove(&username);
 }
-
-fn check_username(state: &AppState, string: &mut String, name: &str) {
-    let mut user_set = state.user_set.lock().unwrap();
-
-    if !user_set.contains(name) {
-        user_set.insert(name.to_owned());
-
-        string.push_str(name);
-    }
-}
