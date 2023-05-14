@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Chat App</h1>
+
+<button id="join-chat" type="button">Join Chat</button>
+<textarea id="chat" style="display:block; width:600px; height:400px; box-sizing: border-box" cols="30"
+    rows="10"></textarea>
+<input id="input" style="display:block; width:600px; box-sizing: border-box" type="text" placeholder="chat">
+
+<script>
+    const username = document.querySelector("#username");
+    const join_btn = document.querySelector("#join-chat");
+    const textarea = document.querySelector("#chat");
+    const input = document.querySelector("#input");
+
+    join_btn.addEventListener("click", function (e) {
+        this.disabled = true;
+
+        const response = fetch("/auth", {
+            method: 'GET',
+            withCredentials: true,
+        });
+
+        const websocket = new WebSocket("ws://localhost:3000/join");
+
+        websocket.onopen = function () {
+            console.log("connection opened");
+            websocket.send(getAuthCookie()); // Send the stored JWT token as first message
+        }
+
+        const btn = this;
+
+        websocket.onclose = function () {
+            console.log("connection closed");
+            btn.disabled = false;
+        }
+
+        websocket.onmessage = function (e) {
+            console.log("received message: " + e.data);
+            textarea.value += e.data + "\r\n";
+        }
+
+        let disabled = false;
+        input.onkeydown = function (e) {
+            if (e.key == "Enter" && !disabled) {
+                websocket.send(input.value);
+                input.value = "";
+                disabled = true;
+                // Prevent spamming the chat with enter, this is only check in the frontend, 
+                // backend also checks for spamming and allows a message to be sent once a second from a single user
+                setTimeout(function () {
+                    disabled = false;
+                }, 2000);
+            }
+        }
+    });
+
+    // Read the JWT token from the cookies if it exists
+    function getAuthCookie() {
+        var cn = "Authorization=";
+        var idx = document.cookie.indexOf(cn)
+
+        console.log("cookie: " + document.cookie);
+
+        if (idx != -1) {
+            var end = document.cookie.indexOf(";", idx + 1);
+            if (end == -1) end = document.cookie.length;
+            return unescape(document.cookie.substring(idx + cn.length, end));
+        } else {
+            return "";
+        }
+    }
+</script>
+{% endblock content %}

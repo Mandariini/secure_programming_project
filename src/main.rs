@@ -1,7 +1,7 @@
-use axum::{routing::get, routing::post, Extension, Router};
+
+use axum::{routing::get, Extension, Router};
 use std::collections::HashMap;
 use std::{
-    collections::HashSet,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
@@ -16,13 +16,12 @@ mod models;
 mod responses;
 mod websocket;
 
-use handlers::{index, not_found, post_login, post_registration, registration};
-use models::{RegisterLoginRequest, RegisterLoginResponse, UserInfo};
+use crate::handlers::{chat, index, login, not_found, post_login, post_registration, registration};
+use models::{LoginResponse, RegisterLoginRequest, RegisterResponse, UserInfo};
 use websocket::join_chat;
 
 // Shared state between all connections.
 pub struct AppState {
-    user_set: Mutex<HashSet<String>>,
     user_info: Mutex<HashMap<String, UserInfo>>,
     // Channel used to send messages to all connected clients.
     tx: broadcast::Sender<String>,
@@ -41,7 +40,9 @@ async fn main() {
     let mut tera = Tera::default();
     tera.add_raw_templates(vec![
         ("base.html", include_str!("../resources/base.html")),
+        ("chat.html", include_str!("../resources/chat.html")),
         ("index.html", include_str!("../resources/index.html")),
+        ("login.html", include_str!("../resources/login.html")),
         (
             "registration.html",
             include_str!("../resources/registration.html"),
@@ -49,22 +50,18 @@ async fn main() {
     ])
     .unwrap();
 
-    let user_set = Mutex::new(HashSet::new());
     let user_info = Mutex::new(HashMap::new());
-    let (tx, _rx) = broadcast::channel(50);
+    let (tx, _rx) = broadcast::channel(50); // 50 Chatters maximum
 
-    let app_state = Arc::new(AppState {
-        user_set,
-        user_info,
-        tx,
-    });
+    let app_state = Arc::new(AppState { user_info, tx });
 
     let routes = Router::new()
         .route("/", get(index))
         .route("/index", get(index))
         .route("/join", get(join_chat))
+        .route("/chat", get(chat))
         .route("/register", get(registration).post(post_registration))
-        .route("/login", post(post_login))
+        .route("/login", get(login).post(post_login))
         .fallback(not_found)
         .layer(Extension(Arc::new(tera)))
         .layer(ConcurrencyLimitLayer::new(100))

@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jsonwebtoken::{errors::ErrorKind, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
 pub const JWT_SECRET: &str = "my-32-character-ultra-secure-12";
@@ -20,7 +20,7 @@ impl Claims {
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards")
                 .as_millis()
-                + JWT_EXPIRES_IN_MINUTES * 60 * 1000,
+                + JWT_EXPIRES_IN_MINUTES * 60 * 1000, // Token expires in 1 hour and requires relogin
         }
     }
 
@@ -37,7 +37,7 @@ impl Claims {
                 .expect("Time went backwards")
                 .as_millis()
         {
-            return Err("Token expired".to_string());
+            return Err("Token expired, please relogin".to_string());
         }
 
         Ok(())
@@ -63,10 +63,16 @@ pub fn decode_jwt(token: &String) -> Result<Claims, String> {
 
     match decoded {
         Ok(data) => {
-            return Ok(data.claims);
+            let retVal = data.claims.verify();
+            if retVal.is_ok() {
+                return Ok(data.claims);
+            }
+
+            return Err(retVal.unwrap_err());
         }
         Err(e) => {
-            return Err(e.to_string());
+            tracing::error!("Failed to decode JWT: {}", e);
+            return Err("Failed to authenticate user".to_string());
         }
     }
 }

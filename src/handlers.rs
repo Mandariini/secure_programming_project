@@ -1,29 +1,44 @@
-use crate::auth::{Claims, JWT_EXPIRES_IN_MINUTES, JWT_SECRET};
-use crate::{RegisterLoginRequest, RegisterLoginResponse, UserInfo};
+use crate::{LoginResponse, RegisterLoginRequest, RegisterResponse, UserInfo};
 use axum::extract::State;
-use axum::http::{self, Response, StatusCode};
+
+
+use axum::http::header::SET_COOKIE;
+use axum::http::{Response, StatusCode};
+
 use axum::response::{Html, IntoResponse};
-use axum::{http::header::SET_COOKIE, http::HeaderValue};
 use axum::{Extension, Json};
-use jsonwebtoken::{EncodingKey, Header};
-use serde_json::{json, Value};
+
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+
 use tera::Tera;
 use tracing::info;
 
+
+
 use crate::auth;
-use crate::responses::Responses;
+
 use crate::AppState;
 
 pub async fn not_found() -> StatusCode {
     return StatusCode::NOT_FOUND;
 }
 
-pub async fn index(Extension(templates): Extension<Arc<Tera>>) -> impl IntoResponse {
+pub async fn index(
+    Extension(templates): Extension<Arc<Tera>>,
+    _headers: axum::headers::HeaderMap,
+) -> impl IntoResponse {
+    // TODO: if authenticated
+
+    let mut context = tera::Context::new();
+    context.insert("user_authenticated", &false);
+
+    Html(templates.render("index.html", &context).unwrap())
+}
+
+pub async fn chat(Extension(templates): Extension<Arc<Tera>>) -> impl IntoResponse {
     Html(
         templates
-            .render("index.html", &tera::Context::new())
+            .render("chat.html", &tera::Context::new())
             .unwrap(),
     )
 }
@@ -36,10 +51,18 @@ pub async fn registration(Extension(templates): Extension<Arc<Tera>>) -> impl In
     )
 }
 
+pub async fn login(Extension(templates): Extension<Arc<Tera>>) -> impl IntoResponse {
+    Html(
+        templates
+            .render("login.html", &tera::Context::new())
+            .unwrap(),
+    )
+}
+
 pub async fn post_registration(
     State(app_state): State<Arc<AppState>>,
     Json(payload): Json<RegisterLoginRequest>, // if the request doesn't deserialize to RegisterRequest, it will return an error
-) -> Json<RegisterLoginResponse> {
+) -> Json<RegisterResponse> {
     tracing::info!("Username: {}", payload.username);
     tracing::info!("Password: {}", payload.password);
 
@@ -47,10 +70,9 @@ pub async fn post_registration(
     match payload.validate() {
         Ok(_) => {}
         Err(e) => {
-            return Json(RegisterLoginResponse {
+            return Json(RegisterResponse {
                 success: false,
                 message: e.to_string(),
-                token: None,
             });
         }
     }
@@ -62,36 +84,22 @@ pub async fn post_registration(
         .unwrap()
         .contains_key(&payload.username)
     {
-        return Json(RegisterLoginResponse {
+        return Json(RegisterResponse {
             success: false,
             message: "Username already exists".to_string(),
-            token: None,
         });
     } else {
-        // TODO: Hash password and store in database
-
+        // Hash password and store
         app_state.user_info.lock().unwrap().insert(
             payload.username.clone(),
             UserInfo::create_user(payload.username, payload.password),
         );
 
-        return Json(RegisterLoginResponse {
+        return Json(RegisterResponse {
             success: true,
             message: "User registered successfully".to_string(),
-            token: None,
         });
     }
-}
-
-pub async fn authorize(headers: http::HeaderMap) -> ApiResult<()> {
-    let cookie = headers.get(http::header::COOKIE).ok_or((
-        StatusCode::UNAUTHORIZED,
-        Json(json!({ "error": "No cookie" })),
-    ))?;
-
-    // Decode JWT
-
-    Ok(())
 }
 
 pub async fn post_login(
@@ -104,7 +112,7 @@ pub async fn post_login(
             return Response::builder()
                 .status(400)
                 .body(
-                    Json(RegisterLoginResponse {
+                    Json(LoginResponse {
                         success: false,
                         message: e.to_string(),
                         token: None,
@@ -127,7 +135,7 @@ pub async fn post_login(
                     .header("content-type", "application/json")
                     .header(SET_COOKIE, "Authorization=Bearer ".to_string() + &token)
                     .body(
-                        Json(RegisterLoginResponse {
+                        Json(LoginResponse {
                             success: true,
                             message: "Login successful!".to_string(),
                             token: Some(token),
@@ -140,7 +148,7 @@ pub async fn post_login(
                 return Response::builder()
                     .status(401)
                     .body(
-                        Json(RegisterLoginResponse {
+                        Json(LoginResponse {
                             success: false,
                             message: "User does not exist or wrong password".to_string(),
                             token: None,
@@ -155,7 +163,7 @@ pub async fn post_login(
             return Response::builder()
                 .status(401)
                 .body(
-                    Json(RegisterLoginResponse {
+                    Json(LoginResponse {
                         success: false,
                         message: "User does not exist or wrong password".to_string(),
                         token: None,
