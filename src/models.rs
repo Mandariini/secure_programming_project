@@ -1,4 +1,5 @@
 use rand_core::{OsRng, RngCore};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -59,6 +60,11 @@ pub struct RegisterLoginRequest {
 
 impl RegisterLoginRequest {
     pub fn validate(&self) -> Result<(), String> {
+        let re = Regex::new(r"^[a-zA-Z0-9_]+$").unwrap();
+        if !re.is_match(&self.username) {
+            return Err("Username can only contain upper and lower case letters a-z, numbers, and underscores".to_string());
+        }
+
         if self.username.len() < 4 {
             return Err("Username must be at least 4 characters long.".to_string());
         }

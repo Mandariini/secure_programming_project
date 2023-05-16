@@ -63,12 +63,12 @@ pub fn decode_jwt(token: &String) -> Result<Claims, String> {
 
     match decoded {
         Ok(data) => {
-            let retVal = data.claims.verify();
-            if retVal.is_ok() {
+            let ret_val = data.claims.verify();
+            if ret_val.is_ok() {
                 return Ok(data.claims);
             }
 
-            return Err(retVal.unwrap_err());
+            return Err(ret_val.unwrap_err());
         }
         Err(e) => {
             tracing::error!("Failed to decode JWT: {}", e);

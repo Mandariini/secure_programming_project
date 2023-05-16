@@ -6,19 +6,37 @@ use axum::{
 };
 use futures::SinkExt;
 use futures::StreamExt;
+use sanitize_html::rules::predefined::DEFAULT;
+use sanitize_html::sanitize_str;
 use std::sync::Arc;
 use std::time::{self, Duration};
 use tokio::sync::Mutex;
+use tracing::{error, info};
 
 use crate::AppState;
 
 const MESSAGE_SLOW_MODE_TIME_IN_SECONDS: Duration = Duration::from_secs(2);
+const MESSAGE_MAX_LENGTH: usize = 100;
+const MAXIMUM_USERS: usize = 20;
+
+fn sanitize_input(input: &str) -> String {
+    let sanitized_input = sanitize_str(&DEFAULT, input).unwrap();
+
+    // Trim the input to a maximum length
+    let trimmed_input = sanitized_input
+        .trim()
+        .chars()
+        .take(MESSAGE_MAX_LENGTH)
+        .collect::<String>();
+
+    trimmed_input
+}
 
 pub async fn join_chat(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| chat_socket(socket, state))
+    return ws.on_upgrade(|socket| chat_socket(socket, state));
 }
 
 async fn chat_socket(socket: WebSocket, state: Arc<AppState>) {
@@ -30,6 +48,19 @@ async fn chat_socket(socket: WebSocket, state: Arc<AppState>) {
     let sender_clone_1 = Arc::clone(&sender);
     let sender_clone_2 = Arc::clone(&sender);
     let sender_clone_3 = Arc::clone(&sender);
+
+    if state.tx.receiver_count() >= MAXIMUM_USERS {
+        sender
+            .lock()
+            .await
+            .send(Message::Text(format!(
+                "Maximum users reached, wait a bit and try again",
+            )))
+            .await
+            .ok();
+
+        return;
+    }
 
     let mut username: String = "".to_string();
     while let Some(Ok(message)) = receiver.next().await {
@@ -98,8 +129,11 @@ async fn chat_socket(socket: WebSocket, state: Arc<AppState>) {
             }
             prev_message_time = time::SystemTime::now();
 
+            // Trim the message to fit max size and remove unwanted characters
+            let sanitized_text = sanitize_input(&text);
+
             // Add username before message.
-            let _ = tx.send(format!("{}: {}", name, text));
+            let _ = tx.send(format!("{}: {}", name, sanitized_text));
         }
     });
 

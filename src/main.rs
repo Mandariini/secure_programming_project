@@ -1,4 +1,3 @@
-
 use axum::{routing::get, Extension, Router};
 use std::collections::HashMap;
 use std::{
@@ -8,12 +7,11 @@ use std::{
 use tera::Tera;
 use tokio::sync::broadcast;
 use tower::limit::ConcurrencyLimitLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod auth;
 mod handlers;
 mod models;
-mod responses;
 mod websocket;
 
 use crate::handlers::{chat, index, login, not_found, post_login, post_registration, registration};
@@ -29,13 +27,11 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "example_chat=trace".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    // Configure the tracing subscriber for logging
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::from_default_env())
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("failed to set tracing subscriber");
 
     let mut tera = Tera::default();
     tera.add_raw_templates(vec![
